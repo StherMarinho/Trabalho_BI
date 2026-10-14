@@ -27,7 +27,7 @@ def inserir_ignorando_duplicatas(df, tabela, engine):
 # DIM_LOCAL
 dim_local = (
     df[['Código do município', 'Município', 'Estado']]
-    .drop_duplicates()
+    .drop_duplicates(subset=['Código do município'])
     .rename(columns={
         'Código do município': 'codigo_ibge',
         'Município': 'municipio',
