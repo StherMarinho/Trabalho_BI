@@ -1,0 +1,12 @@
+﻿# Dados
+dados/
+*.xlsx
+*.csv
+
+# Senhas
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
