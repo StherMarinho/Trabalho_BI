@@ -27,8 +27,6 @@ COLUNAS_NECESSARIAS = [
     'MES_ESTATISTICA',
     'ANO_ESTATISTICA',
     'FLAG_VIOLENCIA_DOMESTICA',
-    'DESCR_TIPO_PESSOA',
-    'SEXO_PESSOA',
 ]
 
 
@@ -41,10 +39,9 @@ def carregar_ssp(caminho=CAMINHO_PADRAO):
         encoding='utf-8',
     )
 
-    # cada B.O. tem 1 linha por pessoa envolvida; a tela pública conta
-    # ocorrências de violência doméstica contra a mulher na condição de vítima
-    df = df[df['DESCR_TIPO_PESSOA'].str.strip().eq('Vítima')]
-    df = df[df['SEXO_PESSOA'].str.strip().eq('F')]
+    # a base já é de violência contra a mulher (SEXO_PESSOA vem sempre 'F' e
+    # DESCR_TIPO_PESSOA inclui Vítima, Autor/Vítima, Criança e Adolescente),
+    # então não filtramos por sexo nem por tipo de pessoa
     df = df[df['FLAG_VIOLENCIA_DOMESTICA'].str.strip().eq('VIOLÊNCIA DOMÉSTICA')]
 
     df['regiao'] = df['GRANDE_AREA_CIRC'].str.strip().str.upper().map(MAPA_REGIAO)
