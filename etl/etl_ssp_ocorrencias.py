@@ -35,10 +35,14 @@ def inserir_ignorando_duplicatas(df, tabela, engine):
         conn.execute(sql, df.to_dict(orient='records'))
 
 
-# DIM_FONTE -- dimensão compartilhada com o fato do Lesfem; aqui só
-# garantimos que a linha 'SSP-SP' exista
-dim_fonte = pd.DataFrame({'nome_fonte': ['SSP-SP'], 'tipo_base': ['Oficial']})
-inserir_ignorando_duplicatas(dim_fonte, 'dim_fonte', engine)
+# DIM_FONTE -- Garante de forma segura que a fonte 'SSP-SP' exista sem duplicar
+sql_fonte = text("""
+    INSERT INTO dim_fonte (nome_fonte, tipo_base)
+    VALUES (:nome_fonte, :tipo_base)
+    ON DUPLICATE KEY UPDATE tipo_base = VALUES(tipo_base)
+""")
+with engine.begin() as conn:
+    conn.execute(sql_fonte, {'nome_fonte': 'SSP-SP', 'tipo_base': 'Oficial'})
 
 # DIM_REGIAO_SP -- domínio fixo, só existem 3 regiões na tabela do site
 dim_regiao = pd.DataFrame({'nome_regiao': ['Capital', 'Demacro', 'Interior']})
@@ -46,9 +50,6 @@ inserir_ignorando_duplicatas(dim_regiao, 'dim_regiao_sp', engine)
 print(f"dim_regiao_sp: {len(dim_regiao)} registros processados")
 
 # DIM_TIPO_OCORRENCIA
-# categoria_agregada é NOT NULL no DDL e não vamos alterar o banco. Como a
-# tabela emulada só tem tipos atômicos (sem linhas de subtotal), cada tipo é
-# a própria categoria.
 dim_tipo = (
     df[['tipo_ocorrencia']]
     .drop_duplicates()

@@ -1,4 +1,4 @@
-CREATE DATABASE dw_violencia_mulher;
+CREATE DATABASE IF NOT EXISTS dw_violencia_mulher;
 USE dw_violencia_mulher;
 
 -- DIMENSÕES COMPARTILHADAS
@@ -6,7 +6,8 @@ USE dw_violencia_mulher;
 CREATE TABLE dim_fonte (
     id_fonte     INT AUTO_INCREMENT PRIMARY KEY,
     nome_fonte   VARCHAR(30)  NOT NULL,   -- 'SSP-SP', 'Imprensa', 'SINESP'
-    tipo_base    VARCHAR(30)  NOT NULL    -- 'Oficial', 'Jornalística'
+    tipo_base    VARCHAR(30)  NOT NULL,   -- 'Oficial', 'Jornalística'
+    UNIQUE KEY uq_nome_fonte (nome_fonte)   -- <--- Restrição adicionada para evitar duplicatas
 );
 
 CREATE TABLE dim_local (
