@@ -1,10 +1,3 @@
-"""
-ETL da Pessoa 4 — população por município (IBGE/SIDRA) -> fato_populacao.
-
-Lê (só leitura): dim_local (Pessoa 3) e dim_fonte (etl_fontes.py)
-Rodar DEPOIS de etl_lesfem_geografico.py. Não depende de etl_lesfem_atributos.py.
-Rodar da raiz do repositório:  python etl/etl_ibge_populacao.py
-"""
 import os
 
 import pandas as pd

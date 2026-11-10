@@ -1,7 +1,9 @@
 import pandas as pd
 import numpy as np
+from pathlib import Path
 
-CAMINHO_PADRAO = 'dados/Base-de-dados-2025_v1.xlsx'
+BASE_DIR = Path(__file__).parent.parent
+CAMINHO_PADRAO = BASE_DIR / 'dados' / 'Base-de-dados-2025_v1.xlsx'
 
 SIGLAS_ESTADO = {
     'Minas Gerais': 'MG', 'São Paulo': 'SP', 'Goiás': 'GO',

@@ -1,13 +1,3 @@
-"""
-ETL da Pessoa 4 — dimensões e fato do Lesfem.
-
-Popula:  dim_vinculo, dim_arma, dim_atributos_caso, dim_faixa_etaria,
-         fato_casos_feminicidio
-Lê (só leitura, populadas pela Pessoa 3 / Pessoa 5):
-         dim_local, dim_tempo_dia, dim_local_crime, dim_fonte
-
-Rodar da raiz do repositório:  python etl/pessoa4_lesfem.py
-"""
 import os
 import sys
 
