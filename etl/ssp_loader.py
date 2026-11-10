@@ -2,35 +2,40 @@ import pandas as pd
 
 CAMINHO_PADRAO = 'dados/BASE_VD.csv'
 
-# A tela pública da SSP (ssp.sp.gov.br/estatistica/violencia-contra-a-mulher)
-# só mostra 3 regiões: Capital, Demacro (demais municípios da Região
-# Metropolitana de SP) e Interior. GRANDE_AREA_CIRC na base bruta traz
-# "CAPITAL", "GRANDE SÃO PAULO" e "INTERIOR" -- padronizamos para o nome
-# usado na tela.
+# só as ocorrências deste ano vão para o DW
+ANO_ALVO = '2025'
+
+# A tabela do site da SSP (ssp.sp.gov.br/estatistica/violencia-contra-a-mulher)
+# tem 3 regiões: Capital, Demacro (demais municípios da Região Metropolitana)
+# e Interior. GRANDE_AREA_CIRC na base bruta traz "CAPITAL",
+# "GRANDE SÃO PAULO" e "INTERIOR" -- padronizamos para o nome usado no site.
 MAPA_REGIAO = {
     'CAPITAL': 'Capital',
     'GRANDE SÃO PAULO': 'Demacro',
     'DEMACRO': 'Demacro',
     'INTERIOR': 'Interior',
 }
+REGIOES = ['Capital', 'Demacro', 'Interior']
 
-# Só lemos as colunas realmente necessárias para reproduzir a tela pública
-# (a base bruta tem 69 colunas / ~900 mil linhas).
-# ESPECIE entrou para compor dim_tipo_ocorrencia.categoria_agregada --
-# ver carregar_ssp() abaixo.
+# A base baixada é de ocorrências individuais (1 linha por pessoa envolvida em
+# cada B.O.), e não a tabela agregada do site. Lemos só o necessário para
+# reconstruir essa tabela.
+# Um B.O. é identificado por ID_DELEGACIA + ANO_BO + NUM_BO (o número do B.O.
+# sozinho se repete entre delegacias).
 COLUNAS_NECESSARIAS = [
+    'ID_DELEGACIA',
     'ANO_BO',
     'NUM_BO',
     'GRANDE_AREA_CIRC',
     'NATUREZA_APURADA',
-    'ESPECIE',
     'MES_ESTATISTICA',
     'ANO_ESTATISTICA',
-    'FLAG_VIOLENCIA_DOMESTICA',
 ]
 
 
-def carregar_ssp(caminho=CAMINHO_PADRAO):
+def carregar_ocorrencias(caminho=CAMINHO_PADRAO, ano=ANO_ALVO):
+    """Passo 1: lê a base e devolve 1 linha por ocorrência
+    (B.O. + tipo de crime), já padronizada."""
     df = pd.read_csv(
         caminho,
         sep=';',
@@ -39,41 +44,69 @@ def carregar_ssp(caminho=CAMINHO_PADRAO):
         encoding='utf-8',
     )
 
-    # a base já é de violência contra a mulher (SEXO_PESSOA vem sempre 'F' e
-    # DESCR_TIPO_PESSOA inclui Vítima, Autor/Vítima, Criança e Adolescente),
-    # então não filtramos por sexo nem por tipo de pessoa
-    df = df[df['FLAG_VIOLENCIA_DOMESTICA'].str.strip().eq('VIOLÊNCIA DOMÉSTICA')]
+    # a base já é de violência contra a mulher (todos os tipos de crime),
+    # então não filtramos por sexo, tipo de pessoa ou violência doméstica.
+    # Só filtramos o ano da estatística (o mesmo critério do site).
+    df = df[df['ANO_ESTATISTICA'].str.strip().eq(ano)].copy()
 
+    # região (Capital / Demacro / Interior)
     df['regiao'] = df['GRANDE_AREA_CIRC'].str.strip().str.upper().map(MAPA_REGIAO)
-    df = df.dropna(subset=['regiao'])
+    sem_regiao = df['regiao'].isna()
+    if sem_regiao.any():
+        print(f"AVISO: {sem_regiao.sum()} linhas descartadas por região fora do mapeamento:")
+        print(df.loc[sem_regiao, 'GRANDE_AREA_CIRC'].value_counts(dropna=False))
+    df = df[~sem_regiao]
 
-    # descricao = tipo atômico (ex.: "LESÃO CORPORAL DOLOSA") -- é o que a
-    # tela pública mostra linha a linha
+    # tipo de ocorrência (ex.: "LESÃO CORPORAL DOLOSA")
     df['tipo_ocorrencia'] = df['NATUREZA_APURADA'].str.strip().str.upper()
+    df = df.dropna(subset=['tipo_ocorrencia'])
 
-    # categoria_agregada = título da lei (ESPECIE, ex.: "Dos crimes contra a
-    # pessoa") -- permite recompor os subtotais que a SSP às vezes publica
-    # agrupando vários tipos atômicos. Nem toda linha vem com ESPECIE
-    # preenchido, então usamos o valor mais frequente para cada tipo.
-    df['especie'] = df['ESPECIE'].str.strip()
-    moda_especie = (
-        df[df['especie'].notna() & df['especie'].ne('')]
-        .groupby('tipo_ocorrencia')['especie']
-        .agg(lambda s: s.mode().iat[0])
-    )
-    df['categoria_agregada'] = df['tipo_ocorrencia'].map(moda_especie).fillna('Outros')
-
+    # período
     df['ano'] = pd.to_numeric(df['ANO_ESTATISTICA'], errors='coerce')
     df['mes'] = pd.to_numeric(df['MES_ESTATISTICA'], errors='coerce')
     df = df.dropna(subset=['ano', 'mes'])
     df['ano'] = df['ano'].astype(int)
     df['mes'] = df['mes'].astype(int)
 
-    # um mesmo B.O. pode repetir a mesma vítima quando há mais de uma
-    # tipificação (NATUREZA_APURADA); mantemos 1 linha por
-    # (B.O. + tipo de ocorrência), que é o que a tela pública conta
-    df = df.drop_duplicates(subset=['ANO_BO', 'NUM_BO', 'tipo_ocorrencia'])
+    # 1 linha por B.O. e tipo de crime: um B.O. tem várias linhas (uma por
+    # pessoa envolvida) e contaria o mesmo crime mais de uma vez
+    df = df.drop_duplicates(
+        subset=['ID_DELEGACIA', 'ANO_BO', 'NUM_BO', 'tipo_ocorrencia']
+    )
 
-    df = df.astype(object).where(df.notna(), None)
+    return df[['regiao', 'tipo_ocorrencia', 'ano', 'mes']]
 
-    return df[['regiao', 'tipo_ocorrencia', 'categoria_agregada', 'ano', 'mes']]
+
+def montar_tabela_site(ocorrencias):
+    """Passo 2: emula a tabela do site da SSP, por mês:
+    Tipo de Ocorrência | Capital | Demacro | Interior | Total"""
+    tabela = (
+        ocorrencias
+        .groupby(['ano', 'mes', 'tipo_ocorrencia', 'regiao'])
+        .size()
+        .unstack('regiao', fill_value=0)
+        .reindex(columns=REGIOES, fill_value=0)
+        .reset_index()
+    )
+    tabela.columns.name = None
+    tabela['Total'] = tabela[REGIOES].sum(axis=1)
+    return tabela
+
+
+def carregar_ssp(caminho=CAMINHO_PADRAO, ano=ANO_ALVO):
+    """Devolve a tabela no formato do site (já agregada)."""
+    return montar_tabela_site(carregar_ocorrencias(caminho, ano))
+
+
+def tabela_site_para_fato(tabela):
+    """Passo 3: transforma as colunas Capital/Demacro/Interior em linhas,
+    que é o formato da fato_ocorrencias_ssp (1 linha por região).
+    A coluna Total NÃO vai para o DW: ela é a soma das regiões, e carregá-la
+    duplicaria a contagem."""
+    longo = tabela.melt(
+        id_vars=['ano', 'mes', 'tipo_ocorrencia'],
+        value_vars=REGIOES,
+        var_name='regiao',
+        value_name='quantidade_ocorrencias',
+    )
+    return longo[longo['quantidade_ocorrencias'] > 0]
